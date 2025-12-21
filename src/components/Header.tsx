@@ -13,12 +13,12 @@ const Header: React.FC = () => {
           </div>
           <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-accent animate-pulse" />
         </div>
-        
+
         <div>
           <h1 className="font-display text-xl tracking-wider text-foreground">
-            <span className="text-primary neo-text-glow">NEO</span>
-            <span className="text-secondary">-</span>
-            <span>KYOTO</span>
+            <span className="text-primary neo-text-glow">SYNAPSE</span>
+            <span className="text-secondary opacity-0 animate-pulse"> </span>
+            <span>FRONTIER</span>
           </h1>
           <p className="text-xs text-muted-foreground tracking-widest uppercase">
             Smart Grid 2025 • Urban Meta-Simulator
@@ -34,9 +34,9 @@ const Header: React.FC = () => {
             System Online
           </span>
         </div>
-        
+
         <div className="h-6 w-px bg-border" />
-        
+
         <div className="text-xs text-muted-foreground font-mono">
           v1.0.0-alpha
         </div>

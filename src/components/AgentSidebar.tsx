@@ -2,12 +2,12 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { CellType, AlgorithmType } from '@/hooks/usePathfinder';
 import { AgentType, Agent } from '@/hooks/useAgents';
-import { 
-  Car, 
-  Plane, 
-  Ambulance, 
-  Play, 
-  RotateCcw, 
+import {
+  Car,
+  Plane,
+  Ambulance,
+  Play,
+  RotateCcw,
   Trash2,
   MapPin,
   Target,
@@ -62,7 +62,12 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
   const algorithms: { id: AlgorithmType; name: string; color: string; description: string }[] = [
     { id: 'bfs', name: 'BFS', color: 'primary', description: 'Breadth-First Search - Shortest path guarantee' },
     { id: 'dfs', name: 'DFS', color: 'secondary', description: 'Depth-First Search - Deep exploration' },
-    { id: 'astar', name: 'A*', color: 'accent', description: 'A* with Manhattan heuristic - Optimal pathfinding' },
+    { id: 'ucs', name: 'UCS', color: 'accent', description: 'Uniform Cost Search - Lowest cost path' },
+    { id: 'astar', name: 'A*', color: 'neon-purple', description: 'A* Search - Optimal pathfinding' },
+    { id: 'greedy', name: 'Greedy', color: 'neon-amber', description: 'Greedy Best-First - Fast but not optimal' },
+    { id: 'bidirectional', name: 'Bi-Dir', color: 'neon-emerald', description: 'Bidirectional Search - Meet in middle' },
+    { id: 'beam', name: 'Beam', color: 'neon-pink', description: 'Beam Search - Memory optimized' },
+    { id: 'iddfs', name: 'IDDFS', color: 'primary', description: 'Iterative Deepening DFS' },
   ];
 
   const placements: { type: CellType; icon: React.ReactNode; label: string }[] = [
@@ -107,9 +112,9 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
           {algorithms.map(algo => (
             <Button
               key={algo.id}
-              variant={algorithm === algo.id ? 
-                (algo.color === 'primary' ? 'neon' : 
-                 algo.color === 'secondary' ? 'neon-amber' : 'neon-emerald') 
+              variant={algorithm === algo.id ?
+                (algo.color === 'primary' ? 'neon' :
+                  algo.color === 'secondary' ? 'neon-amber' : 'neon-emerald')
                 : 'ghost'}
               size="sm"
               onClick={() => setAlgorithm(algo.id)}
@@ -223,13 +228,13 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
             </Button>
           ))}
         </div>
-        
+
         {/* Active Agents */}
         {agents.length > 0 && (
           <div className="space-y-2 mt-3">
             <p className="text-xs text-muted-foreground">Active Agents:</p>
             {agents.map(agent => (
-              <div 
+              <div
                 key={agent.id}
                 className="flex items-center justify-between bg-muted/50 rounded px-2 py-1"
               >
@@ -259,7 +264,7 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
           <Play className="w-4 h-4 mr-2" />
           {isRunning ? 'Running...' : 'Run Algorithm'}
         </Button>
-        
+
         <div className="grid grid-cols-2 gap-2">
           <Button
             onClick={onClearPath}

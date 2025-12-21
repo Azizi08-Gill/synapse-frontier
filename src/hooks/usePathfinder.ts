@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 
 export type CellType = 'empty' | 'road' | 'building' | 'obstacle' | 'start' | 'end';
-export type AlgorithmType = 'bfs' | 'dfs' | 'astar';
+export type AlgorithmType = 'bfs' | 'dfs' | 'astar' | 'ucs' | 'greedy' | 'bidirectional' | 'beam' | 'iddfs';
 
 export interface Cell {
   x: number;
@@ -15,6 +15,14 @@ export interface Cell {
   parent: Cell | null;
 }
 
+export interface LogEntry {
+  timestamp: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'algorithm';
+}
+
+const GRID_SIZE = 20;
+
 export interface PathfinderState {
   grid: Cell[][];
   visitedCells: { x: number; y: number }[];
@@ -25,45 +33,6 @@ export interface PathfinderState {
   startPos: { x: number; y: number } | null;
   endPos: { x: number; y: number } | null;
 }
-
-export interface LogEntry {
-  timestamp: string;
-  message: string;
-  type: 'info' | 'success' | 'warning' | 'algorithm';
-}
-
-const GRID_SIZE = 20;
-
-// Manhattan distance heuristic - perfect for grid-based city navigation
-// where diagonal movement is not allowed
-const manhattanDistance = (x1: number, y1: number, x2: number, y2: number): number => {
-  return Math.abs(x1 - x2) + Math.abs(y1 - y2);
-};
-
-const getNeighbors = (grid: Cell[][], cell: Cell): Cell[] => {
-  const neighbors: Cell[] = [];
-  const directions = [
-    { x: 0, y: -1 }, // up
-    { x: 1, y: 0 },  // right
-    { x: 0, y: 1 },  // down
-    { x: -1, y: 0 }, // left
-  ];
-
-  for (const dir of directions) {
-    const newX = cell.x + dir.x;
-    const newY = cell.y + dir.y;
-
-    if (newX >= 0 && newX < GRID_SIZE && newY >= 0 && newY < GRID_SIZE) {
-      const neighbor = grid[newY][newX];
-      if (neighbor.type !== 'building' && neighbor.type !== 'obstacle') {
-        neighbors.push(neighbor);
-      }
-    }
-  }
-
-  return neighbors;
-};
-
 export const usePathfinder = () => {
   const [grid, setGrid] = useState<Cell[][]>(() => initializeGrid());
   const [visitedCells, setVisitedCells] = useState<{ x: number; y: number }[]>([]);
@@ -75,13 +44,16 @@ export const usePathfinder = () => {
   const [endPos, setEndPos] = useState<{ x: number; y: number } | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const animationRef = useRef<NodeJS.Timeout | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const queueRef = useRef<any[]>([]);
+  const processingRef = useRef(false);
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
-    const timestamp = new Date().toLocaleTimeString('en-US', { 
-      hour12: false, 
-      hour: '2-digit', 
-      minute: '2-digit', 
-      second: '2-digit' 
+    const timestamp = new Date().toLocaleTimeString('en-US', {
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
     });
     setLogs(prev => [...prev.slice(-50), { timestamp, message, type }]);
   }, []);
@@ -90,32 +62,51 @@ export const usePathfinder = () => {
     setLogs([]);
   }, []);
 
+  const processQueue = useCallback(async () => {
+    if (processingRef.current) return;
+    processingRef.current = true;
+
+    while (queueRef.current.length > 0) {
+      const data = queueRef.current.shift();
+
+      if (data.type === 'visited_batch') {
+        const nodes = data.nodes;
+        for (const node of nodes) {
+          setVisitedCells(prev => [...prev, node]);
+          await new Promise(r => setTimeout(r, speed / 2));
+        }
+      } else if (data.type === 'path_found') {
+        addLog(`Target Acquired! Path Complexity: ${data.complexity} nodes`, 'success');
+        const path = data.path;
+        for (const node of path) {
+          setPathCells(prev => [...prev, node]);
+          await new Promise(r => setTimeout(r, speed));
+        }
+      } else if (data.type === 'complete') {
+        setIsRunning(false);
+        if (wsRef.current) wsRef.current.close();
+      } else if (data.error) {
+        addLog(`Error: ${data.error}`, 'warning');
+        setIsRunning(false);
+      }
+    }
+
+    processingRef.current = false;
+  }, [speed, addLog]);
+
   function initializeGrid(): Cell[][] {
     const newGrid: Cell[][] = [];
     for (let y = 0; y < GRID_SIZE; y++) {
       const row: Cell[] = [];
       for (let x = 0; x < GRID_SIZE; x++) {
-        // Create a city-like pattern with roads and buildings
         let type: CellType = 'road';
-        
-        // Create building blocks (every 4-5 cells, leave roads)
         if (x % 5 !== 0 && y % 5 !== 0 && x % 5 !== 4 && y % 5 !== 4) {
-          // Random chance for buildings in the interior
           if (Math.random() < 0.4) {
             type = 'building';
           }
         }
-        
         row.push({
-          x,
-          y,
-          type,
-          visited: false,
-          isPath: false,
-          gCost: Infinity,
-          hCost: 0,
-          fCost: Infinity,
-          parent: null,
+          x, y, type, visited: false, isPath: false, gCost: Infinity, hCost: 0, fCost: Infinity, parent: null,
         });
       }
       newGrid.push(row);
@@ -124,8 +115,10 @@ export const usePathfinder = () => {
   }
 
   const resetGrid = useCallback(() => {
-    if (animationRef.current) {
-      clearTimeout(animationRef.current);
+    if (animationRef.current) clearTimeout(animationRef.current);
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
     }
     setGrid(initializeGrid());
     setVisitedCells([]);
@@ -138,19 +131,13 @@ export const usePathfinder = () => {
   }, [addLog, clearLogs]);
 
   const clearPath = useCallback(() => {
-    if (animationRef.current) {
-      clearTimeout(animationRef.current);
+    if (animationRef.current) clearTimeout(animationRef.current);
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
     }
-    setGrid(prev => prev.map(row => 
-      row.map(cell => ({
-        ...cell,
-        visited: false,
-        isPath: false,
-        gCost: Infinity,
-        hCost: 0,
-        fCost: Infinity,
-        parent: null,
-      }))
+    setGrid(prev => prev.map(row =>
+      row.map(cell => ({ ...cell, visited: false, isPath: false, gCost: Infinity, hCost: 0, fCost: Infinity, parent: null }))
     ));
     setVisitedCells([]);
     setPathCells([]);
@@ -188,265 +175,62 @@ export const usePathfinder = () => {
     });
   }, [startPos, endPos, addLog]);
 
-  const runBFS = useCallback(async () => {
+  const runBackendAlgorithm = useCallback(() => {
     if (!startPos || !endPos) return;
 
-    addLog('BFS Algorithm initiated', 'algorithm');
-    addLog('BFS explores level by level - guarantees shortest path in unweighted graphs', 'info');
+    addLog(`${algorithm.toUpperCase()} stream initiated via Neural Core...`, 'algorithm');
 
-    const visited: { x: number; y: number }[] = [];
-    const queue: Cell[] = [];
-    const gridCopy = grid.map(row => row.map(cell => ({ ...cell })));
-    
-    const startCell = gridCopy[startPos.y][startPos.x];
-    queue.push(startCell);
-    startCell.visited = true;
-
-    let found = false;
-    let endCell: Cell | null = null;
-
-    while (queue.length > 0 && !found) {
-      const current = queue.shift()!;
-      visited.push({ x: current.x, y: current.y });
-      
-      addLog(`Exploring cell [${current.x}, ${current.y}] | Queue size: ${queue.length}`, 'algorithm');
-
-      if (current.x === endPos.x && current.y === endPos.y) {
-        found = true;
-        endCell = current;
-        addLog('Target found! Reconstructing path...', 'success');
-        break;
-      }
-
-      const neighbors = getNeighbors(gridCopy, current);
-      for (const neighbor of neighbors) {
-        if (!neighbor.visited) {
-          neighbor.visited = true;
-          neighbor.parent = current;
-          queue.push(neighbor);
-        }
-      }
+    // Close existing connection if any
+    if (wsRef.current) {
+      wsRef.current.close();
     }
 
-    // Animate visited cells
-    for (let i = 0; i < visited.length; i++) {
-      await new Promise(resolve => {
-        animationRef.current = setTimeout(resolve, speed);
-      });
-      setVisitedCells(prev => [...prev, visited[i]]);
-    }
+    // Reset Queue
+    queueRef.current = [];
+    processingRef.current = false;
 
-    // Reconstruct and animate path
-    if (found && endCell) {
-      const path: { x: number; y: number }[] = [];
-      let current: Cell | null = endCell;
-      while (current) {
-        path.unshift({ x: current.x, y: current.y });
-        current = current.parent;
-      }
-      
-      addLog(`Path found! Length: ${path.length} cells`, 'success');
-      
-      for (let i = 0; i < path.length; i++) {
-        await new Promise(resolve => {
-          animationRef.current = setTimeout(resolve, speed * 2);
-        });
-        setPathCells(prev => [...prev, path[i]]);
-      }
-    } else {
-      addLog('No path found - target unreachable', 'warning');
-    }
+    const ws = new WebSocket('ws://localhost:8000/ws/solve');
+    wsRef.current = ws;
 
-    setIsRunning(false);
-  }, [grid, startPos, endPos, speed, addLog]);
+    ws.onopen = () => {
+      addLog('Uplink established. Transmitting grid state...', 'info');
+      ws.send(JSON.stringify({
+        grid,
+        startPos,
+        endPos,
+        algorithm
+      }));
+    };
 
-  const runDFS = useCallback(async () => {
-    if (!startPos || !endPos) return;
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      queueRef.current.push(data);
+      processQueue();
+    };
 
-    addLog('DFS Algorithm initiated', 'algorithm');
-    addLog('DFS dives deep before backtracking - may not find shortest path', 'info');
+    ws.onerror = (error) => {
+      console.error('WebSocket Error:', error);
+      addLog('Neural Core Uplink Failed. Check backend status.', 'warning');
+      setIsRunning(false);
+    };
 
-    const visited: { x: number; y: number }[] = [];
-    const stack: Cell[] = [];
-    const gridCopy = grid.map(row => row.map(cell => ({ ...cell })));
-    
-    const startCell = gridCopy[startPos.y][startPos.x];
-    stack.push(startCell);
+    ws.onclose = () => {
+      // Connection closed
+    };
 
-    let found = false;
-    let endCell: Cell | null = null;
-
-    while (stack.length > 0 && !found) {
-      const current = stack.pop()!;
-      
-      if (current.visited) continue;
-      current.visited = true;
-      visited.push({ x: current.x, y: current.y });
-      
-      addLog(`Exploring cell [${current.x}, ${current.y}] | Stack depth: ${stack.length}`, 'algorithm');
-
-      if (current.x === endPos.x && current.y === endPos.y) {
-        found = true;
-        endCell = current;
-        addLog('Target found! Reconstructing path...', 'success');
-        break;
-      }
-
-      const neighbors = getNeighbors(gridCopy, current);
-      for (const neighbor of neighbors) {
-        if (!neighbor.visited) {
-          neighbor.parent = current;
-          stack.push(neighbor);
-        }
-      }
-    }
-
-    // Animate visited cells
-    for (let i = 0; i < visited.length; i++) {
-      await new Promise(resolve => {
-        animationRef.current = setTimeout(resolve, speed);
-      });
-      setVisitedCells(prev => [...prev, visited[i]]);
-    }
-
-    // Reconstruct and animate path
-    if (found && endCell) {
-      const path: { x: number; y: number }[] = [];
-      let current: Cell | null = endCell;
-      while (current) {
-        path.unshift({ x: current.x, y: current.y });
-        current = current.parent;
-      }
-      
-      addLog(`Path found! Length: ${path.length} cells`, 'success');
-      
-      for (let i = 0; i < path.length; i++) {
-        await new Promise(resolve => {
-          animationRef.current = setTimeout(resolve, speed * 2);
-        });
-        setPathCells(prev => [...prev, path[i]]);
-      }
-    } else {
-      addLog('No path found - target unreachable', 'warning');
-    }
-
-    setIsRunning(false);
-  }, [grid, startPos, endPos, speed, addLog]);
-
-  const runAStar = useCallback(async () => {
-    if (!startPos || !endPos) return;
-
-    addLog('A* Algorithm initiated', 'algorithm');
-    addLog('Using Manhattan distance heuristic - optimal for grid-based city navigation', 'info');
-
-    const visited: { x: number; y: number }[] = [];
-    const openSet: Cell[] = [];
-    const closedSet = new Set<string>();
-    const gridCopy = grid.map(row => row.map(cell => ({ ...cell })));
-    
-    const startCell = gridCopy[startPos.y][startPos.x];
-    startCell.gCost = 0;
-    startCell.hCost = manhattanDistance(startPos.x, startPos.y, endPos.x, endPos.y);
-    startCell.fCost = startCell.gCost + startCell.hCost;
-    openSet.push(startCell);
-
-    addLog(`Initial heuristic h(start) = ${startCell.hCost}`, 'algorithm');
-
-    let found = false;
-    let endCell: Cell | null = null;
-
-    while (openSet.length > 0 && !found) {
-      // Sort by fCost to get the most promising node
-      openSet.sort((a, b) => a.fCost - b.fCost);
-      const current = openSet.shift()!;
-      
-      const cellKey = `${current.x},${current.y}`;
-      if (closedSet.has(cellKey)) continue;
-      closedSet.add(cellKey);
-      
-      visited.push({ x: current.x, y: current.y });
-      
-      addLog(`A* evaluating [${current.x}, ${current.y}] | f=${current.fCost.toFixed(1)} g=${current.gCost} h=${current.hCost.toFixed(1)}`, 'algorithm');
-
-      if (current.x === endPos.x && current.y === endPos.y) {
-        found = true;
-        endCell = current;
-        addLog('Optimal path found!', 'success');
-        break;
-      }
-
-      const neighbors = getNeighbors(gridCopy, current);
-      for (const neighbor of neighbors) {
-        const neighborKey = `${neighbor.x},${neighbor.y}`;
-        if (closedSet.has(neighborKey)) continue;
-
-        const tentativeGCost = current.gCost + 1;
-
-        if (tentativeGCost < neighbor.gCost) {
-          neighbor.parent = current;
-          neighbor.gCost = tentativeGCost;
-          neighbor.hCost = manhattanDistance(neighbor.x, neighbor.y, endPos.x, endPos.y);
-          neighbor.fCost = neighbor.gCost + neighbor.hCost;
-
-          if (!openSet.find(n => n.x === neighbor.x && n.y === neighbor.y)) {
-            openSet.push(neighbor);
-          }
-        }
-      }
-    }
-
-    // Animate visited cells
-    for (let i = 0; i < visited.length; i++) {
-      await new Promise(resolve => {
-        animationRef.current = setTimeout(resolve, speed);
-      });
-      setVisitedCells(prev => [...prev, visited[i]]);
-    }
-
-    // Reconstruct and animate path
-    if (found && endCell) {
-      const path: { x: number; y: number }[] = [];
-      let current: Cell | null = endCell;
-      while (current) {
-        path.unshift({ x: current.x, y: current.y });
-        current = current.parent;
-      }
-      
-      addLog(`Optimal path length: ${path.length} cells | Total cost: ${endCell.gCost}`, 'success');
-      
-      for (let i = 0; i < path.length; i++) {
-        await new Promise(resolve => {
-          animationRef.current = setTimeout(resolve, speed * 2);
-        });
-        setPathCells(prev => [...prev, path[i]]);
-      }
-    } else {
-      addLog('No path found - target unreachable', 'warning');
-    }
-
-    setIsRunning(false);
-  }, [grid, startPos, endPos, speed, addLog]);
+  }, [grid, startPos, endPos, algorithm, addLog, processQueue]);
 
   const runAlgorithm = useCallback(() => {
     if (!startPos || !endPos || isRunning) return;
-    
+
     clearPath();
     setIsRunning(true);
-    
+
+    // Slight delay to allow UI to update before heavy animation starts
     setTimeout(() => {
-      switch (algorithm) {
-        case 'bfs':
-          runBFS();
-          break;
-        case 'dfs':
-          runDFS();
-          break;
-        case 'astar':
-          runAStar();
-          break;
-      }
+      runBackendAlgorithm();
     }, 100);
-  }, [algorithm, startPos, endPos, isRunning, clearPath, runBFS, runDFS, runAStar]);
+  }, [startPos, endPos, isRunning, clearPath, runBackendAlgorithm]);
 
   return {
     grid,
