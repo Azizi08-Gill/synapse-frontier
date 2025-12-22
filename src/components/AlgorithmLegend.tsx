@@ -13,20 +13,26 @@ const AlgorithmLegend: React.FC<AlgorithmLegendProps> = ({ algorithm }) => {
     { label: 'Road', className: 'bg-grid-road' },
     { label: 'Building', className: 'bg-grid-building' },
     { label: 'Obstacle', className: 'bg-grid-obstacle' },
-    { 
-      label: 'Visited', 
+    {
+      label: 'Visited',
       className: cn(
         algorithm === 'bfs' && 'bg-primary/30',
         algorithm === 'dfs' && 'bg-secondary/30',
-        algorithm === 'astar' && 'bg-accent/30',
+        (algorithm === 'astar' || algorithm === 'ucs') && 'bg-accent/30',
+        algorithm === 'bidirectional' && 'bg-[hsl(var(--neon-emerald))/0.3]',
+        algorithm === 'beam' && 'bg-[hsl(var(--neon-pink))/0.3]',
+        algorithm === 'iddfs' && 'bg-primary/30'
       )
     },
-    { 
-      label: 'Path', 
+    {
+      label: 'Path',
       className: cn(
         algorithm === 'bfs' && 'bg-primary',
         algorithm === 'dfs' && 'bg-secondary',
-        algorithm === 'astar' && 'bg-accent',
+        (algorithm === 'astar' || algorithm === 'ucs') && 'bg-accent',
+        algorithm === 'bidirectional' && 'bg-[hsl(var(--neon-emerald))]',
+        algorithm === 'beam' && 'bg-[hsl(var(--neon-pink))]',
+        algorithm === 'iddfs' && 'bg-primary'
       )
     },
   ];

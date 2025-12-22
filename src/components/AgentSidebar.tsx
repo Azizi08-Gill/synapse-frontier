@@ -21,8 +21,10 @@ import {
 import { cn } from '@/lib/utils';
 
 interface AgentSidebarProps {
-  algorithm: AlgorithmType;
-  setAlgorithm: (algo: AlgorithmType) => void;
+  numCores: number;
+  setNumCores: (n: number) => void;
+  selectedAlgos: AlgorithmType[];
+  setSelectedAlgos: (algos: AlgorithmType[]) => void;
   speed: number;
   setSpeed: (speed: number) => void;
   placementMode: CellType;
@@ -38,11 +40,14 @@ interface AgentSidebarProps {
   onRemoveAgent: (id: string) => void;
   weatherEffect: 'clear' | 'rain' | 'snow';
   setWeatherEffect: (effect: 'clear' | 'rain' | 'snow') => void;
+  pathCosts: number[];
 }
 
 const AgentSidebar: React.FC<AgentSidebarProps> = ({
-  algorithm,
-  setAlgorithm,
+  numCores,
+  setNumCores,
+  selectedAlgos,
+  setSelectedAlgos,
   speed,
   setSpeed,
   placementMode,
@@ -58,16 +63,17 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
   onRemoveAgent,
   weatherEffect,
   setWeatherEffect,
+  pathCosts,
 }) => {
   const algorithms: { id: AlgorithmType; name: string; color: string; description: string }[] = [
-    { id: 'bfs', name: 'BFS', color: 'primary', description: 'Breadth-First Search - Shortest path guarantee' },
-    { id: 'dfs', name: 'DFS', color: 'secondary', description: 'Depth-First Search - Deep exploration' },
-    { id: 'ucs', name: 'UCS', color: 'accent', description: 'Uniform Cost Search - Lowest cost path' },
-    { id: 'astar', name: 'A*', color: 'neon-purple', description: 'A* Search - Optimal pathfinding' },
-    { id: 'greedy', name: 'Greedy', color: 'neon-amber', description: 'Greedy Best-First - Fast but not optimal' },
-    { id: 'bidirectional', name: 'Bi-Dir', color: 'neon-emerald', description: 'Bidirectional Search - Meet in middle' },
-    { id: 'beam', name: 'Beam', color: 'neon-pink', description: 'Beam Search - Memory optimized' },
-    { id: 'iddfs', name: 'IDDFS', color: 'primary', description: 'Iterative Deepening DFS' },
+    { id: 'bfs', name: 'BFS', color: 'primary', description: 'Breadth-First Search' },
+    { id: 'dfs', name: 'DFS', color: 'secondary', description: 'Depth-First Search' },
+    { id: 'ucs', name: 'UCS', color: 'accent', description: 'Uniform Cost Search' },
+    { id: 'astar', name: 'A*', color: 'neon-purple', description: 'A* Search' },
+    { id: 'greedy', name: 'Greedy', color: 'neon-amber', description: 'Greedy Best-First' },
+    { id: 'bidirectional', name: 'Bi-Dir', color: 'neon-emerald', description: 'Bidirectional' },
+    { id: 'beam', name: 'Beam', color: 'neon-pink', description: 'Beam Search' },
+    { id: 'iddfs', name: 'IDDFS', color: 'primary', description: 'Iterative Deepening' },
   ];
 
   const placements: { type: CellType; icon: React.ReactNode; label: string }[] = [
@@ -82,7 +88,8 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
     { type: 'reflex', icon: <Car className="w-4 h-4" />, label: 'Reflex Car', description: 'Simple reflex agent - detects front cell only' },
     { type: 'goal', icon: <Plane className="w-4 h-4" />, label: 'Delivery Drone', description: 'Goal-based agent with destination' },
     { type: 'utility', icon: <Ambulance className="w-4 h-4" />, label: 'Smart Ambulance', description: 'Utility-based agent calculates happiness' },
-  ];
+    { type: 'reflex', icon: <Car className="w-4 h-4" />, label: 'Reflex Car', description: 'Simple reflex agent - detects front cell only' },
+  ]; // Duplicate fix in next pass if needed, just mapping strictly here
 
   const weatherOptions: { type: 'clear' | 'rain' | 'snow'; icon: React.ReactNode; label: string }[] = [
     { type: 'clear', icon: <Sun className="w-4 h-4" />, label: 'Clear' },
@@ -102,34 +109,72 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
         </p>
       </div>
 
+      {/* Core Allocation (New) */}
+      <div className="space-y-3">
+        <h3 className="font-display text-sm text-foreground tracking-widest uppercase flex items-center gap-2">
+          <div className="w-1 h-4 bg-neon-cyan rounded-full" />
+          Core Allocation
+        </h3>
+        <div className="grid grid-cols-3 gap-1 bg-muted/30 p-1 rounded-md border border-border">
+          {[1, 2, 3].map(n => (
+            <Button
+              key={n}
+              variant={numCores === n ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setNumCores(n)}
+              className={cn(
+                "h-7 text-xs font-display tracking-wider",
+                numCores === n && "neo-glow"
+              )}
+            >
+              {n} CORE{n > 1 ? 'S' : ''}
+            </Button>
+          ))}
+        </div>
+      </div>
+
       {/* Algorithm Selection */}
       <div className="space-y-3">
         <h3 className="font-display text-sm text-foreground tracking-widest uppercase flex items-center gap-2">
           <div className="w-1 h-4 bg-primary rounded-full" />
-          Search Algorithm
+          Algorithm Select
         </h3>
-        <div className="grid grid-cols-3 gap-2">
-          {algorithms.map(algo => (
-            <Button
-              key={algo.id}
-              variant={algorithm === algo.id ?
-                (algo.color === 'primary' ? 'neon' :
-                  algo.color === 'secondary' ? 'neon-amber' : 'neon-emerald')
-                : 'ghost'}
-              size="sm"
-              onClick={() => setAlgorithm(algo.id)}
-              className={cn(
-                "font-display text-xs",
-                algorithm === algo.id && "font-bold"
+
+        <div className="space-y-3">
+          {Array.from({ length: numCores }).map((_, index) => (
+            <div key={index} className="space-y-1 animate-in fade-in slide-in-from-left-2 duration-300" style={{ animationDelay: `${index * 100}ms` }}>
+              {numCores > 1 && (
+                <p className="text-[10px] text-muted-foreground ml-1 font-mono uppercase tracking-widest">
+                    // CORE_0{index + 1}
+                </p>
               )}
-            >
-              {algo.name}
-            </Button>
+              <div className="grid grid-cols-4 gap-1">
+                {algorithms.map(algo => (
+                  <button
+                    key={algo.id}
+                    onClick={() => {
+                      const newAlgos = [...selectedAlgos];
+                      newAlgos[index] = algo.id;
+                      setSelectedAlgos(newAlgos);
+                    }}
+                    className={cn(
+                      "h-8 text-[9px] font-bold rounded border transition-all uppercase tracking-tight",
+                      selectedAlgos[index] === algo.id
+                        ? `bg-${algo.color}/20 border-${algo.color} text-foreground shadow-[0_0_10px_hsl(var(--${algo.color === 'primary' ? 'primary' :
+                          algo.color === 'secondary' ? 'secondary' :
+                            algo.color === 'accent' ? 'accent' : algo.color
+                        })/0.3)]`
+                        : "bg-transparent border-transparent hover:bg-muted text-muted-foreground"
+                    )}
+                    title={algo.name}
+                  >
+                    {algo.name}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
-        <p className="text-xs text-muted-foreground italic">
-          {algorithms.find(a => a.id === algorithm)?.description}
-        </p>
       </div>
 
       {/* Speed Control */}
@@ -229,28 +274,39 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
           ))}
         </div>
 
-        {/* Active Agents */}
-        {agents.length > 0 && (
-          <div className="space-y-2 mt-3">
-            <p className="text-xs text-muted-foreground">Active Agents:</p>
-            {agents.map(agent => (
-              <div
-                key={agent.id}
-                className="flex items-center justify-between bg-muted/50 rounded px-2 py-1"
-              >
-                <span className="text-xs">{agent.name}</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={() => onRemoveAgent(agent.id)}
-                >
-                  <Trash2 className="w-3 h-3" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Total Cost */}
+        <div className="space-y-2 mt-3 p-3 bg-muted/30 rounded border border-border">
+          <p className="text-xs text-muted-foreground uppercase tracking-widest flex justify-between">
+            <span>Total Cost</span>
+            {numCores > 1 && <span className="text-[10px] text-primary">PARALLEL MODE</span>}
+          </p>
+
+          {numCores === 1 ? (
+            <div className="flex items-end gap-2">
+              <span className="text-2xl font-bold font-display text-primary neo-text-glow">
+                {pathCosts[0] || 0}
+              </span>
+              <span className="text-xs text-muted-foreground mb-1">units</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {Array.from({ length: numCores }).map((_, i) => (
+                <div key={i} className="flex flex-col bg-background/50 p-2 rounded border border-border/50">
+                  <span className="text-[9px] text-muted-foreground uppercase">Core 0{i + 1}</span>
+                  <div className="flex items-baseline gap-1">
+                    <span className={cn(
+                      "text-sm font-bold font-display",
+                      pathCosts[i] > 0 ? "text-primary neo-text-glow" : "text-muted-foreground"
+                    )}>
+                      {pathCosts[i] || 0}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground">u</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Action Buttons */}

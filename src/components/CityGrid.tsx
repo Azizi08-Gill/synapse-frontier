@@ -30,16 +30,16 @@ const CityGrid: React.FC<CityGridProps> = ({
 }) => {
   const [hoveredCell, setHoveredCell] = useState<{ x: number; y: number } | null>(null);
 
-  const isVisited = (x: number, y: number) => 
+  const isVisited = (x: number, y: number) =>
     visitedCells.some(cell => cell.x === x && cell.y === y);
-  
-  const isPath = (x: number, y: number) => 
+
+  const isPath = (x: number, y: number) =>
     pathCells.some(cell => cell.x === x && cell.y === y);
 
-  const isStart = (x: number, y: number) => 
+  const isStart = (x: number, y: number) =>
     startPos?.x === x && startPos?.y === y;
 
-  const isEnd = (x: number, y: number) => 
+  const isEnd = (x: number, y: number) =>
     endPos?.x === x && endPos?.y === y;
 
   const hasAgent = (x: number, y: number) =>
@@ -50,6 +50,11 @@ const CityGrid: React.FC<CityGridProps> = ({
       case 'bfs': return 'cell-visited-bfs';
       case 'dfs': return 'cell-visited-dfs';
       case 'astar': return 'cell-visited-astar';
+      case 'ucs': return 'cell-visited-ucs';
+      case 'greedy': return 'cell-visited-greedy';
+      case 'bidirectional': return 'cell-visited-bidirectional';
+      case 'beam': return 'cell-visited-beam';
+      case 'iddfs': return 'cell-visited-iddfs';
       default: return '';
     }
   };
@@ -59,6 +64,11 @@ const CityGrid: React.FC<CityGridProps> = ({
       case 'bfs': return 'bg-primary';
       case 'dfs': return 'bg-secondary';
       case 'astar': return 'bg-accent';
+      case 'ucs': return 'bg-accent';
+      case 'greedy': return 'bg-[hsl(var(--neon-amber))]';
+      case 'bidirectional': return 'bg-[hsl(var(--neon-emerald))]';
+      case 'beam': return 'bg-[hsl(var(--neon-pink))]';
+      case 'iddfs': return 'bg-primary';
       default: return 'bg-primary';
     }
   };
@@ -104,9 +114,9 @@ const CityGrid: React.FC<CityGridProps> = ({
       </div>
 
       {/* The grid */}
-      <div 
+      <div
         className="grid gap-px bg-grid-line/50 rounded-lg overflow-hidden"
-        style={{ 
+        style={{
           gridTemplateColumns: `repeat(20, 1fr)`,
           aspectRatio: '1/1',
         }}
@@ -162,7 +172,7 @@ const CityGrid: React.FC<CityGridProps> = ({
 
                 {/* Agent indicator */}
                 {agent && (
-                  <div 
+                  <div
                     className="absolute inset-1 rounded-full"
                     style={{ backgroundColor: agent.color }}
                   />
@@ -174,7 +184,10 @@ const CityGrid: React.FC<CityGridProps> = ({
                     "absolute inset-0",
                     algorithm === 'bfs' && "shadow-[inset_0_0_10px_hsl(var(--primary)/0.5)]",
                     algorithm === 'dfs' && "shadow-[inset_0_0_10px_hsl(var(--secondary)/0.5)]",
-                    algorithm === 'astar' && "shadow-[inset_0_0_10px_hsl(var(--accent)/0.5)]",
+                    (algorithm === 'astar' || algorithm === 'ucs' || algorithm === 'bidirectional') && "shadow-[inset_0_0_10px_hsl(var(--accent)/0.5)]",
+                    algorithm === 'greedy' && "shadow-[inset_0_0_10px_hsl(var(--neon-amber)/0.5)]",
+                    algorithm === 'beam' && "shadow-[inset_0_0_10px_hsl(var(--neon-pink)/0.5)]",
+                    algorithm === 'iddfs' && "shadow-[inset_0_0_10px_hsl(var(--primary)/0.5)]",
                   )} />
                 )}
               </div>
