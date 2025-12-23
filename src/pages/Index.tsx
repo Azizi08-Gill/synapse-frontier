@@ -11,13 +11,12 @@ import AlgorithmLegend from '@/components/AlgorithmLegend';
 import { cn } from '@/lib/utils';
 
 const Index = () => {
-  const [weatherEffect, setWeatherEffect] = useState<'clear' | 'rain' | 'snow'>('clear');
   const [numCores, setNumCores] = useState(1);
   const [selectedAlgos, setSelectedAlgos] = useState<AlgorithmType[]>(['bfs', 'dfs', 'astar']);
   const [speed, setSpeed] = useState(50);
+  const [weatherEffect, setWeatherEffect] = useState<'clear'>('clear'); // Keeping prop for compatibility but unused
 
   // Map State (Shared)
-  // usePathfinder is now purely a Grid Editor hook
   const {
     grid,
     startPos,
@@ -26,15 +25,13 @@ const Index = () => {
     resetGrid,
   } = usePathfinder();
 
-  // Solver Instances - We instantiate 3 "Cores"
-  // Even if not active, hooks must be called unconditionally
-  const solver1 = useAlgorithm(1, grid, startPos, endPos, selectedAlgos[0], speed, weatherEffect);
-  const solver2 = useAlgorithm(2, grid, startPos, endPos, selectedAlgos[1], speed, weatherEffect);
-  const solver3 = useAlgorithm(3, grid, startPos, endPos, selectedAlgos[2], speed, weatherEffect);
+  // Solver Instances - renamed concept to "Fleet Controllers"
+  const solver1 = useAlgorithm(1, grid, startPos, endPos, selectedAlgos[0], speed, 'clear');
+  const solver2 = useAlgorithm(2, grid, startPos, endPos, selectedAlgos[1], speed, 'clear');
+  const solver3 = useAlgorithm(3, grid, startPos, endPos, selectedAlgos[2], speed, 'clear');
 
   const solvers = [solver1, solver2, solver3];
 
-  // Active solvers based on numCores
   const activeSolvers = solvers.slice(0, numCores);
   const isRunning = activeSolvers.some(s => s.isRunning);
 
@@ -73,18 +70,17 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background neo-grid-pattern">
-      {/* Ambient background effects */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl" />
-      </div>
+    <div className="min-h-screen bg-background neo-grid-pattern text-foreground font-mono">
+      {/* Structural overlaid grid lines for industrial feel */}
+      <div className="fixed inset-0 pointer-events-none z-0 opacity-10"
+        style={{ backgroundImage: 'linear-gradient(0deg, transparent 24%, #333 25%, #333 26%, transparent 27%, transparent 74%, #333 75%, #333 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, #333 25%, #333 26%, transparent 27%, transparent 74%, #333 75%, #333 76%, transparent 77%, transparent)', backgroundSize: '100px 100px' }}
+      />
 
       <div className="relative z-10 flex flex-col h-screen">
         <Header />
 
         <main className="flex-1 flex overflow-hidden p-4 gap-4">
-          {/* Left Sidebar - Controls */}
+          {/* Left Sidebar - Control Room */}
           <AgentSidebar
             numCores={numCores}
             setNumCores={setNumCores}
@@ -103,12 +99,12 @@ const Index = () => {
             agents={agents}
             onSpawnAgent={handleSpawnAgent}
             onRemoveAgent={removeAgent}
-            weatherEffect={weatherEffect}
-            setWeatherEffect={setWeatherEffect}
+            weatherEffect={'clear'}
+            setWeatherEffect={() => { }}
             pathCosts={activeSolvers.map(s => s.pathCost)}
           />
 
-          {/* Center - Main Grid(s) */}
+          {/* Center - Warehouse Floor */}
           <div className="flex-1 flex flex-col gap-4 min-w-0">
             <div className={cn(
               "flex-1 min-h-0 grid gap-4 transition-all duration-500 ease-in-out",
@@ -117,27 +113,26 @@ const Index = () => {
             )}>
               {activeSolvers.map((solver, index) => (
                 <div key={index} className="flex flex-col gap-2 min-h-0 animate-in fade-in zoom-in-95 duration-300">
-                  {numCores > 1 && (
-                    <div className="flex items-center justify-between px-2">
-                      <div className="flex items-center gap-2">
-                        <div className={cn("w-2 h-2 rounded-full", index === 0 ? "bg-primary shadow-[0_0_8px_hsl(var(--primary))]" : index === 1 ? "bg-secondary shadow-[0_0_8px_hsl(var(--secondary))]" : "bg-accent shadow-[0_0_8px_hsl(var(--accent))]")} />
-                        <span className="text-xs font-mono text-foreground uppercase tracking-wider">
-                          Core 0{index + 1} // <span className={cn(
-                            index === 0 ? "text-primary" : index === 1 ? "text-secondary" : "text-accent"
-                          )}>{selectedAlgos[index].toUpperCase()}</span>
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground font-mono">
-                        {solver.pathCost > 0 ? (
-                          <span className="neo-text-glow text-foreground font-bold">COST: {solver.pathCost}</span>
-                        ) : solver.isRunning ? (
-                          <span className="animate-pulse">PROCESSING...</span>
-                        ) : 'READY'}
+                  <div className="flex items-center justify-between px-2 py-1 bg-card border border-border rounded-t-sm">
+                    <div className="flex items-center gap-2">
+                      {/* Activity Status Light */}
+                      <div className={cn("w-3 h-3 rounded-full border border-black/50 shadow-inner",
+                        solver.isRunning ? "bg-amber-500 animate-pulse" : "bg-emerald-500"
+                      )} />
+                      <span className="text-xs font-bold text-foreground tracking-wider">
+                        FLEET CONTROLLER 0{index + 1} // <span className="text-primary">{selectedAlgos[index].toUpperCase()}</span>
                       </span>
                     </div>
-                  )}
+                    <span className="text-[10px] text-muted-foreground font-mono bg-background/50 px-2 py-0.5 rounded">
+                      {solver.pathCost > 0 ? (
+                        <span className="text-primary font-bold">COST: {solver.pathCost}</span>
+                      ) : solver.isRunning ? (
+                        <span className="text-amber-500">CALCULATING ROUTE...</span>
+                      ) : 'STANDBY'}
+                    </span>
+                  </div>
 
-                  <div className="flex-1 min-h-0 overflow-hidden rounded-lg border border-border/50 relative shadow-lg bg-background/50 backdrop-blur-sm">
+                  <div className="flex-1 min-h-0 overflow-hidden border border-t-0 border-border bg-card relative shadow-inner">
                     <CityGrid
                       grid={grid}
                       visitedCells={solver.visitedCells}
@@ -148,23 +143,17 @@ const Index = () => {
                       agents={agents}
                       onCellClick={handleCellClick}
                       placementMode={placementMode}
-                      weatherEffect={weatherEffect}
+                      weatherEffect={'clear'}
                     />
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Legend - Only show for the first algo or a general legend?
-                AlgorithmLegend actually highlights colors based on 'algorithm' prop.
-                If we pass 'bfs', it highlights BFS colors.
-                Ideally we show legend for active algorithms or just general.
-                Let's stick to showing Core 1's legend for simplicity or fix it to be static.
-            */}
             <AlgorithmLegend algorithm={selectedAlgos[0]} />
           </div>
 
-          {/* Right Sidebar - Stats & Logs */}
+          {/* Right Sidebar - Analytics */}
           <div className="w-80 flex flex-col gap-4">
             <StatsPanel
               cores={activeSolvers.map((s, i) => ({
@@ -172,10 +161,11 @@ const Index = () => {
                 algorithm: selectedAlgos[i],
                 visitedCount: s.visitedCells.length,
                 pathLength: s.pathCells.length,
+                pathCost: s.pathCost, // Include the path cost here
                 isRunning: s.isRunning,
               }))}
               agents={agents}
-              weatherEffect={weatherEffect}
+              weatherEffect={'clear'}
             />
 
             <div className="flex-1 min-h-0">
@@ -185,17 +175,14 @@ const Index = () => {
         </main>
 
         {/* Footer */}
-        <footer className="h-10 neo-panel rounded-none border-x-0 border-b-0 flex items-center justify-center">
-          <p className="text-xs text-muted-foreground font-mono flex items-center gap-2">
-            NEO-KYOTO URBAN INTELLIGENCE SYSTEM • SECTOR 7G •
-            <span className="text-primary">SIMULATION ACTIVE</span>
-            {numCores > 1 && (
-              <>
-                <span className="text-muted-foreground">•</span>
-                <span className="text-accent animate-pulse">// PARALLEL PROCESSING ENABLED</span>
-              </>
-            )}
-          </p>
+        <footer className="h-8 bg-card border-t border-border flex items-center justify-between px-4 text-[10px] uppercase font-mono text-muted-foreground">
+          <div className="flex items-center gap-4">
+            <span>System: <span className="text-emerald-500">ONLINE</span></span>
+            <span>Grid: 20x20</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span>Synapse Frontier Logistics Engine v2.0</span>
+          </div>
         </footer>
       </div>
     </div>
