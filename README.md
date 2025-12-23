@@ -104,23 +104,7 @@ If it's raining (simulated), the penalty increases, simulating slower forklift s
 
 ---
 
-## 6. Viva Q&A Cheat Sheet
-
-**Q: Why did you choose A* over BFS?**
-**A:** BFS explores every single node, effectively blind. A* uses a heuristic function (Manhattan distance) to guide the search towards the target, making it much more computationally efficient for a large warehouse.
-
-**Q: How does the Frontend talk to the Backend?**
-**A:** We use **WebSockets**. This allows the server to push updates (like "I visited node x,y") instantly to the client without the client continuously asking "Are you done yet?" (Polling).
-
-**Q: What is the complexity of your grid?**
-**A:** It is a 20x20 matrix, meaning 400 total nodes. In Big O notation, worst-case search is O(V+E) where V is vertices (400) and E is edges.
-
-**Q: How are you rendering 3D without a 3D engine?**
-**A:** We manipulate the 2D DOM using CSS Matrix properties (`transform-style: preserve-3d`). We effectively "fold" HTML divs into boxes, saving massive amounts of RAM compared to loading a WebGL context.
-
----
-
-## 7. Setup & Run Instructions
+## 6. Setup & Run Instructions
 
 **Backend:**
 ```bash
